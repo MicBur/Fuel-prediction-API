@@ -5,7 +5,7 @@ contains typed skeletons to unblock downstream components."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -44,20 +44,27 @@ class OpenWeatherClient:
             "lon": lon,
             "appid": self.api_key,
             "units": "metric",
+            "exclude": "minutely,alerts",
         }
-        response = self._client.get(url, params=params)
-        response.raise_for_status()
+        try:
+            response = self._client.get(url, params=params)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:  # pragma: no cover - network
+            logger.error("OpenWeather request failed: %s", exc)
+            return []
         payload: Dict[str, Any] = response.json()
 
         forecast: List[WeatherPoint] = []
         for item in payload.get("hourly", []):
             forecast.append(
                 WeatherPoint(
-                    timestamp=datetime.fromtimestamp(item["dt"]),
+                    timestamp=datetime.fromtimestamp(item["dt"], tz=timezone.utc).replace(tzinfo=None),
                     temperature_c=float(item.get("temp", 0.0)),
                     humidity=item.get("humidity"),
                     wind_speed_ms=item.get("wind_speed"),
-                    precipitation_mm=(item.get("rain", {}) or {}).get("1h"),
+                    precipitation_mm=
+                        (item.get("rain", {}) or {}).get("1h")
+                        or (item.get("snow", {}) or {}).get("1h"),
                     cloud_cover_pct=item.get("clouds"),
                 )
             )

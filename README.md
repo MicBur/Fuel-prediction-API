@@ -106,7 +106,7 @@ SQLITE_PATH=./data/benzin.db
 MODEL_DIR=./models
 PREDICTION_INTERVAL_MINUTES=5
 RETRAIN_INTERVAL_HOURS=24
-WEATHER_REFRESH_MINUTES=15
+WEATHER_REFRESH_MINUTES=10
 PRICE_REFRESH_MINUTES=5
 API_HOST=0.0.0.0
 API_PORT=8000
@@ -131,8 +131,7 @@ python -m src.main
 
 | Job ID        | Interval (default) | Action                                  |
 |---------------|--------------------|-----------------------------------------|
-| `etl-job`     | 5 min              | Sync stations, capture prices, persist weather |
-| `weather-job` | 15 min             | (future) dedicated weather refresh      |
+| `etl-job`     | 5 min              | Sync stations, capture prices, persist OpenWeather forecast |
 | `retrain-job` | 24 h               | AutoGluon retraining hook               |
 
 Intervals can be tuned via `.env`.
@@ -151,7 +150,7 @@ Planned additions: `GET /health`, `POST /models/retrain`, parameterized predicti
 
 1. **Station Sync** – `list.php` call caches Hamburg stations in `stations` table.
 2. **Price Snapshots** – `prices.php` polled in chunks (10 IDs/request) feeding `price_snapshots`.
-3. **Weather Snapshots** – OpenWeather hourly forecast stored in `weather_snapshots`; DWD client ready for backfill.
+3. **Weather Snapshots** – OpenWeather hourly forecast every 10 minutes; additional Meteostat/DWD backfill pipeline keeps `weather_snapshots` populated historically.
 4. **Feature Store** – `feature_vectors` table aggregates engineered features (placeholder until AutoML wiring).
 
 ## AutoML Lifecycle
@@ -177,6 +176,7 @@ docker-compose up --build
 
 - `scripts/run_etl_once.py` – manual ingestion cycle for debugging.
 - `scripts/retrain.py` – manual AutoGluon retraining trigger (same as daily job).
+- `scripts/backfill_weather.py --days 30` – fetch historical weather via Meteostat (DWD source) for the past N days.
 
 ## Chainlink Integration Path
 
@@ -186,7 +186,7 @@ docker-compose up --build
 
 ## Roadmap
 
-- [ ] Wire OpenWeather ↔ DWD fallback logic + historical backfill.
+- [ ] Finalize OpenWeather ↔ Meteostat/DWD fallback logic + automated history sync.
 - [ ] Implement AutoGluon training + inference pipeline with versioned artifacts.
 - [ ] Add health, metrics, and optional auth/rate-limiting middleware.
 - [ ] Provide CI (GitHub Actions) for lint/test/build.

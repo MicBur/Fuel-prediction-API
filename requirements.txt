@@ -13,3 +13,4 @@ autogluon==1.1.1
 python-dotenv==1.0.1
 orjson==3.10.7
 loguru==0.7.2
+meteostat==1.6.7

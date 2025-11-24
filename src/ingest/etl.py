@@ -11,6 +11,7 @@ from src.config.settings import get_settings
 from src.db import models
 from src.db.session import SessionLocal
 from src.ingest.tankerkoenig import TankerkoenigClient
+from src.ingest.weather_history import HistoricalWeatherIngestor
 from src.ingest.weather_service import WeatherService
 
 
@@ -19,6 +20,7 @@ class ETLPipeline:
         self.settings = get_settings()
         self.tk_client = TankerkoenigClient()
         self.weather_service = WeatherService()
+        self.history_ingestor = HistoricalWeatherIngestor()
 
     def sync_stations(self, session: Session) -> None:
         stations = self.tk_client.list_stations(
@@ -80,9 +82,17 @@ class ETLPipeline:
     def capture_weather(self, session: Session) -> None:
         forecast = self.weather_service.get_forecast()
         for entry in forecast:
+            captured_at = entry.timestamp.replace(tzinfo=None)
+            existing = session.execute(
+                select(models.WeatherSnapshot.id).where(
+                    models.WeatherSnapshot.captured_at == captured_at
+                )
+            ).scalar_one_or_none()
+            if existing:
+                continue
             session.add(
                 models.WeatherSnapshot(
-                    captured_at=entry.timestamp,
+                    captured_at=captured_at,
                     temperature_c=entry.temperature_c,
                     humidity=entry.humidity,
                     wind_speed_ms=entry.wind_speed_ms,
@@ -92,6 +102,11 @@ class ETLPipeline:
             )
         session.commit()
         logger.info("Persisted %s weather points", len(forecast))
+
+    def backfill_weather_history(self, days: int = 30) -> int:
+        """Populate SQLite with Meteostat/DWD historical weather snapshots."""
+
+        return self.history_ingestor.backfill(days)
 
     def run_all(self) -> None:
         with SessionLocal() as session:

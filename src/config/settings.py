@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # Scheduler settings
     prediction_interval_minutes: int = 5
     retrain_interval_hours: int = 24
-    weather_refresh_minutes: int = 15
+    weather_refresh_minutes: int = 10
     price_refresh_minutes: int = 5
 
     # API
